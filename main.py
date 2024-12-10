@@ -167,82 +167,35 @@ async def aviso(ctx, *args):
 # Comandos para la musica 
 
 listaC = []
+ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 7','options': '-vn -filter:a "volume=0.25"'}
+ydl_options = {'format': 'bestaudio/best'}
+ytdl = yt_dlp.YoutubeDL(ydl_options)
 
-def url_cancion(url):
-    ydl_options = {'format': 'bestaudio/best'}
-    with yt_dlp.YoutubeDL(ydl_options) as ydl:
-        try:
-            info = ydl.extract_info(f"ytsearch:{url}", download=False)
-        #     if not info.get('entries'):
-        #         return None
-        #     
-        #     primer_resultado = info['entries'][0]
-        #     cancion = primer_resultado.get('webpage_url')
-        #
-        #     if not cancion:
-        #         return None
-        #     cancion_info = ydl.extract_info(cancion, download=False)
-        #     for f in cancion_info.get('formats', []):
-        #         if f.get('acodec', 'none') != 'none':
-        #             return f['url']
-        #
-        #
-        #
-        #     return None
-        # except Exception as e:
-        #     print(f"Error al obtener la cancion con url: {e}{url}")
-        #     return None
-
-            if 'url' in info:
-                # Es un video individual
-                return info['url']
-            elif 'entries' in info:
-                # Es una playlist, obtener la primera entrada
-                if info['entries']:
-                    return info['entries'][0]['url']
-                else:
-                    return None
-        except Exception as e:
-            print(f"Error al obtener la url: {e}({url})")
-            return None
-
-def reproducir(voz: discord.VoiceClient):
-    if listaC:
-        siguiente = listaC.pop(0)
-        urlC = url_cancion(siguiente)
-        if urlC:
-            
-            voz.play(discord.FFmpegPCMAudio(urlC), after=lambda e: reproducir(voz))
-    else:
-        # Cuando no queden canciones, desconectar
-        asyncio.run_coroutine_threadsafe(voz.disconnect(), bot.loop)
-
+clientes = {} # Controlamos que el bot se pueda usar en diferentes chat de voz
 
 @bot.command()
-async def play(ctx, *urls: str):
-    voz = ctx.voice_client
-    if not voz:
-        if ctx.author.voice:
-            canal = ctx.author.voice.channel
-            voz = await canal.connect()
-        else:
-            await ctx.send(f"{ctx.author},  tienes que estar en canal de voz para usar este comando, tontito")
-            return
-    url = ' '.join(urls)
-    # Agregamos la canción a la lista
-    listaC.append(url)
-    await ctx.send(f"Canción agregada a la lista:\n{url}")
-    print(f"{ctx.author} ha agregado una cancion a la lista")
+async def play(ctx, *arg:str):
+    # voz = ctx.voice_client
+    # if not voz:
+    #     if ctx.author.voice():
+    #         canal = ctx.author.voice.
+    try:
+        cliente = await ctx.author.voice.channel.connect()
+        clientes[cliente.guild.id] = cliente
+    except Exception as e:
+        print(e)
 
-    # Solo iniciamos la reproducción si no hay nada reproduciéndose actualmente
-    if not voz.is_playing():
-        siguiente = listaC.pop(0)
-        urlC = url_cancion(siguiente)
-        if urlC is None:
-            await ctx.send("Error al reproducir la canción.")
-            return
-        voz.play(discord.FFmpegPCMAudio(urlC), after=lambda e: reproducir(voz))
-        await ctx.send(f"🎶 Reproduciendo: {siguiente}")   
+    try:
+        url = ' '.join(arg)
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+        cancion = data['url']
+        player = discord.FFmpegOpusAudio(cancion, **ffmpeg_options)
+        clientes[ctx.guild.id].play(player)
+
+    except Exception as e:
+        print(e)
+
 
 
 
@@ -273,9 +226,10 @@ async def seguir(ctx):
     if voz.is_paused():
         voz.resume()
         await ctx.send("Reproduciendose musica")
+
     else:
         await ctx.send("La musica ya se esta reproduciendose", delete_after=3)
-        print(f"{ctx.author} ha reanudado la musica")
+    print(f"{ctx.author} ha reanudado la musica")
 
 
 @bot.command()
@@ -285,8 +239,8 @@ async def stop(ctx):
         await ctx.send("Tienes que estar en un canal de voz para usar este comando")
         return
     
-    voz.stop()
-    voz.disconnected()
+    #voz.stop()
+    voz.disconnect()
     await ctx.send("Fuera musica", delete_after=1)
     print(f"{ctx.author} ha sacado a Puchi, y no hay mas musica")
 
