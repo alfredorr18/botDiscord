@@ -166,36 +166,159 @@ async def aviso(ctx, *args):
 
 # Comandos para la musica 
 
-listaC = []
+listaURLsYT = []
+listaTitulos = []
+listaURLs = []
 ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 7','options': '-vn -filter:a "volume=0.25"'}
 ydl_options = {'format': 'bestaudio/best'}
 ytdl = yt_dlp.YoutubeDL(ydl_options)
 
 clientes = {} # Controlamos que el bot se pueda usar en diferentes chat de voz
 
+# @bot.command()
+# async def play(ctx, *arg:str):
+#     voz = ctx.voice_client
+#     if not voz:
+#         if ctx.author.voice:
+#             try:
+#                 cliente = await ctx.author.voice.channel.connect()
+#                 clientes[cliente.guild.id] = cliente
+#             except Exception as e:
+#                 print(e)
+#                 await ctx.send(f"{ctx.author.mention}, tienes que estar en un canal de voz tontito")
+#                 print(f"{ctx.author.mention}, tienes que estar en un canal de voz tontito")
+#                 return
+#         else:
+#             await ctx.send(f"{ctx.author.mention}, tienes que estar en un canal de voz tontito")
+#             print(f"{ctx.author.mention}, tienes que estar en un canal de voz tontito")
+#             return
+#     url = ' '.join(arg)
+#     if not url:
+#         await ctx.send(f"{ctx.author.mention} especifica una cancion o URL")
+#         print(f"{ctx.author}, se cree muy listo y no ha especificado nada")
+#         return
+#     try: 
+#         loop = asyncio.get_event_loop()
+#         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(f'ytsearch:{url}', download=False))
+#         
+#         if not data.get('entries'):
+#             await ctx.send("No se encontraron resultados para esa busqueda")
+#             print(f"No se encontraron resultados para la busqueda de {ctx.author}: {url} ")
+#             return
+#
+#
+#         cancion_data = data['entries'][0]
+#         cancion_url = cancion_data['url']
+#         nombre_cancion = cancion_data['title']
+#         cancion_id = cancion_data['id']
+#         if not cancion_url or not nombre_cancion or not cancion_id:
+#             await ctx.send("Error al obtener informacion de la cancion")
+#             print(f"Error al obtener informacion de la cancion {url}, {ctx.author}")
+#             return 
+#         url_youtube = "https://youtube.com/watch?v="+cancion_id 
+#
+#         listaURLsYT.append(url_youtube)
+#         listaTitulos.append(nombre_cancion)
+#         listaURLs.append(cancion_url)
+#         try:
+#             await ctx.message.delete()
+#         except:
+#             pass
+#         if not voz.is_playing():
+#             siguiente = listaURLs.pop(0)
+#             titulo_sig = listaTitulos.pop(0)
+#             urlYT_sig = listaURLsYT.pop(0)
+#             if not siguiente:
+#                 await ctx.send(f"Error al reproducir la cancion {titulo_sig}")
+#                 print(f"Error al reproducir la cancionn {titulo_sig}")
+#                 if voz.is_connected():
+#                     await voz.disconnected()
+#                 return
+#             
+#             
+#             player = discord.FFmpegOpusAudio(siguiente, **ffmpeg_options)
+#             clientes[ctx.guild.id].play(player)
+#
+#             ficha = discord.Embed(description=f"🎶 Reproduciendo:[{titulo_sig}]({urlYT_sig}))", color=discord.Color.red())
+#             
+#             await ctx.send(embed=ficha)
+#         else:
+#             await ctx.send(f"🎶 Se ha añadido **{nombre_cancion}** a la lista.")
+#             
+#
+#     except Exception as e:
+#         print(e)
+#      
+listaURLs = []
+listaURLsYT = []
+listaTitulos = []
+
+def reproducir_siguiente(guild_id):
+    """ Función que se llama cuando termina la canción actual.
+        Si la cola no está vacía, reproduce la siguiente.
+        De lo contrario, no hace nada. """
+    voz = clientes.get(guild_id)
+    if voz and not voz.is_playing() and listaURLs and listaURLsYT and listaTitulos:
+        siguiente = listaURLs.pop(0)
+        listaTitulos.pop(0)
+        listaURLsYT.pop(0)
+        voz.play(discord.FFmpegOpusAudio(siguiente, **ffmpeg_options), after=lambda e: reproducir_siguiente(guild_id))
+
+
 @bot.command()
-async def play(ctx, *arg:str):
-    # voz = ctx.voice_client
-    # if not voz:
-    #     if ctx.author.voice():
-    #         canal = ctx.author.voice.
-    try:
-        cliente = await ctx.author.voice.channel.connect()
-        clientes[cliente.guild.id] = cliente
-    except Exception as e:
-        print(e)
+async def play(ctx, *arg: str):
+    voz = ctx.voice_client
+
+    # Si el bot no está en un canal de voz, lo conectamos
+    if not voz:
+        if ctx.author.voice:
+            try:
+                cliente = await ctx.author.voice.channel.connect()
+                clientes[cliente.guild.id] = cliente
+                voz = cliente
+            except Exception as e:
+                print(e)
+                await ctx.send(f"{ctx.author.mention}, no se pudo conectar al canal de voz.")
+                return
+        else:
+            await ctx.send(f"{ctx.author.mention}, debes estar en un canal de voz.")
+            print(f"{ctx.author.mention}, tienes que estar en un canal de voz tontito")
+            return
+
+    # Obtenemos la URL de la canción
+    url = ' '.join(arg)
+    if not url:
+        await ctx.send("Por favor, proporciona una URL o una búsqueda.")
+        print(f"{ctx.author} se cree muy listillo y no ha especificado nada")
+        return
 
     try:
-        url = ' '.join(arg)
         loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
-        cancion = data['url']
-        player = discord.FFmpegOpusAudio(cancion, **ffmpeg_options)
-        clientes[ctx.guild.id].play(player)
-
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch:{url}", download=False))
+        cancion_data = data['entries'][0]
+        cancion = cancion_data['url']
+        url_yt = "https://youtube.com/?v="+cancion_data['id']
+        titulo = cancion_data['title']
     except Exception as e:
         print(e)
+        await ctx.send("No se pudo obtener la información de la canción.")
+        return
 
+    # Si ya se está reproduciendo algo, agregamos a la cola
+    if voz.is_playing() or voz.is_paused():
+        listaURLs.append(cancion)
+        listaTitulos.append(titulo)
+        listaURLsYT.append(url_yt)
+        ficha = discord.Embed(description=f"🎶 Se ha añadido [{titulo}]({url_yt})", color=discord.Color.red())
+        await ctx.send(embed=ficha)
+
+    else:
+        # Si no se está reproduciendo nada, empezamos a reproducir
+        voz.play(discord.FFmpegOpusAudio(cancion, **ffmpeg_options), after=lambda e: reproducir_siguiente(ctx.guild.id))
+        ficha = discord.Embed(description=f"🎶 Reproduciendo [{titulo}]({url_yt})")
+        await ctx.send(embed=ficha)
+    
+    print(f"{ctx.author} ha añadido una cancion")
 
 
 
@@ -239,10 +362,10 @@ async def stop(ctx):
         await ctx.send("Tienes que estar en un canal de voz para usar este comando")
         return
     
-    #voz.stop()
-    voz.disconnect()
+    voz.stop()
+    await voz.disconnect()
     await ctx.send("Fuera musica", delete_after=1)
-    print(f"{ctx.author} ha sacado a Puchi, y no hay mas musica")
+    print(f"{ctx.author} ha sacado a Puchi, y no hay mas musica en {ctx.author.voice.channel}")
 
 
 
@@ -262,13 +385,12 @@ async def next(ctx):
 
 @bot.command()
 async def lista(ctx):
-    if lista:
+    if listaTitulos and listaURLsYT:
         ficha = discord.Embed(title="Las siguientes 10 canciones", color=discord.Color.green())
-        for lugar, cancion in enumerate(listaC, start=1):
-            if lugar is not 11:
-                ficha.add_field(name="", value=f"{lugar}. {cancion}", inline=False)
-            else: 
-                return
+        for num, (cancion, url) in enumerate(zip(listaTitulos, listaURLsYT), start=1):
+            if num > 10:
+                break
+            ficha.add_field(name="", value=f"**{num}**. [{cancion}]({url})", inline=False)
         
         await ctx.send(embed=ficha)
     else:
@@ -279,15 +401,18 @@ async def lista(ctx):
 
 @bot.command()
 async def listaAll(ctx):
-    if lista:
+    if listaTitulos and listaURLsYT:
         ficha = discord.Embed(title="Lista de canciones", color=discord.Color.green())
-        for lugar, cancion in enumerate(listaC, start=1):
-            ficha.add_field(name="", value=f"{lugar}. {cancion}", inline=False)
+        for num, (cancion, url) in enumerate(zip(listaTitulos, listaURLsYT), start=1):
+            
+            ficha.add_field(name="", value=f"**{num}**. [{cancion}]({url})", inline=False)
         await ctx.send(embed=ficha)
     else:
         await ctx.send("No hay canciones en la lista")
     
     print(f"{ctx.author} ha solicitado todas las canciones de la lista")
+
+
 
 
 
