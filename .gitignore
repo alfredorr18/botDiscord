@@ -1,0 +1,8 @@
+# ignorando token
+.env 
+# ignorando entorno virtual del proyecto
+venv/
+# ignorando arhcivo de configuracion de pyright
+pyrightconfig.json
+# ignorando archivos temporales de Python
+__pycache__/
